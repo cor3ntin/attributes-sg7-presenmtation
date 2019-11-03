@@ -8,7 +8,7 @@
 
 		<link rel="stylesheet" href="css/reset.css">
 		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/theme/white.css">
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/monokai.css">
@@ -25,8 +25,321 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section>Reflection on attributes</section>
+				<section>
+					Serialization
+					<pre><code data-trim data-noescape>
+				struct user {
+					std::string first_name_;
+					std::string last_name_;
+					// should not be serialized
+					mutable std::string full_name_;
+				};
+					</code></pre>
+
+					<pre class="fragment"><code data-trim data-noescape>
+					{
+						"firstName" : "John",
+						"lastName" : "Doe"
+					}
+					</code></pre>
+				</section>
+
+				<section>
+					Qt
+					<pre><code data-trim data-noescape>
+				class my_qt_class : public QObject {
+				Q_SIGNALS:
+					void somethingHappen();
+				public Q_SLOTS:
+					int doSomething();
+
+				};</code></pre>
+
+				<pre class="fragment"><code data-trim data-noescape>
+					#define Q_SLOTS
+					#define Q_SIGNALS public
+				</code></pre>
+				</section>
+
+				<section>
+					Test frameworks - Catch2
+					<pre><code data-trim data-noescape>
+					unsigned int Factorial( unsigned int number );
+
+					TEST_CASE( "Factorials are computed", "[factorial]" ) {
+						REQUIRE( Factorial(1) == 1 );
+					}
+					</code></pre>
+				</section>
+
+				<section>
+					<h1> Motivation </h1>
+					<ul>
+						<li>Filter entities (serialization, meta classes)</li>
+						<li>Attach meta data to entities</li>
+						<li>Apply transformations</li>
+					</ul>
+				</section>
+
+				<section>
+					Use the type system, luke
+					<pre><code data-trim data-noescape>
+						QSlot&lt;std::string&gt; getName() const;
+						json::field&lt;"userName"&gt; getName() const;
+					</code></pre>
+					<pre class="fragment"><code data-trim data-noescape >
+						//???????
+						QSlot&lt;std::string, json::field&lt;"userName"&gt;&gt; getName() const;
+					</code></pre>
+
+					<ul class="fragment">
+						<li>Intrusive</li>
+						<li>Non Composable</li>
+						<li>Templates</li>
+					</ul>
+				</section>
+
+
+				<section>
+					Use the type system, luke
+					<pre><code data-trim data-noescape class="cpp">
+							template &lt;auto T&gt;
+							struct is_qt_slot {
+								static constexpr bool value = false;
+							};
+							struct MyQObject : public QObject{
+								void f();
+								void f(int);
+							};
+							template &lt;&gt;
+							struct is_qt_slot&lt;
+								static_cast&lt;void (MyQObject::*)(int)&gt;(&MyQObject::f)&gt; {
+								static constexpr bool value = true;
+							};
+					</code></pre>
+				</section>
+
+				<section>
+					Attributes
+					<pre><code data-trim data-noescape class="cpp">
+						struct MyQObject {
+							void f();
+							[[qt::slot]] void f(int);
+						};
+					</code></pre>
+					<pre><code data-trim data-noescape class="cpp">
+						[[Catch2::test_case("Checking axioms", {"slide_code"})]]
+						void MyTestCase() {
+							REQUIRE((1 + 1) == 2);
+						}
+					</code></pre>
+					<pre><code data-trim data-noescape class="cpp">
+						struct user {
+							[[json::field("firstName")]]
+							std::string first_name_;
+
+							[[json::field("lastName")]]
+							std::string last_name_;
+
+							// should not be serialized
+							mutable std::string full_name_;
+						};
+					</code></pre>
+				</section>
+
+				<section>
+					Attributes
+					<pre><code data-trim data-noescape class="cpp">
+						[[com_interface("4823F3A4-275A-4DAD-B2FF-4EDA7862C360")]]
+						class IMyCOMInterface : public IUnknown {};
+					</code></pre>
+					<pre><code data-trim data-noescape class="cpp">
+						[[command_line_parser::short_name("L")]]
+						[[command_line_parser::help("Specify the compression level")]]
+						[[command_line_parser::default_value(5)]]
+						int compression_level;
+					</code></pre>
+				</section>
+
+				<section>
+					<ul>
+						<li>API to reflect on attributes</li>
+						<li class="fragment">And that's it</li>
+					</ul>
+				</section>
+
+				<section>
+					Not so fast...
+					<blockquote>
+						[ Note: For each individual attribute, the form of the balanced-token-seq will be specified. — end note ]
+					</blockquote>
+				</section>
+				<section>
+					<img src="soup.png" class="plain"/>
+				</section>
+
+				<section>
+					<pre><code data-trim data-noescape>
+						[[Catch2::test_case("Checking axioms", {"slide_code"})]]
+						void my_test();
+						// => "\"Checking axioms\", {\"slide_code\"}"
+					</code></pre>
+
+					<pre class="fragment"><code data-trim data-noescape>
+						[[catch2::tet_case("Checking axioms", {"slide_code"})]]
+					</code></pre>
+				</section>
+
+				<section>
+					💡 Declared user defined attributes
+					<pre><code data-trim data-noescape>
+						namespace Catch2 {
+						struct test_case{
+							constexpr test_case(
+								std::string name,
+								std::vector&lt;std::string&gt; tags = {});
+
+							std::string name;
+							std::vector&lt;std::string&gt; tags;
+						};
+						}
+					</code></pre>
+
+					<pre class="fragment"><code data-trim data-noescape>
+						[[catch2::test_case("Checking axioms", {"slide_code"})]]
+					</code></pre>
+				</section>
+
+
+				<section>
+					💡 Declared user defined attributes
+					<pre><code data-trim data-noescape>
+						[[fully_qualified::&lt;constructor-call&gt;)]]
+					</code></pre>
+
+					<pre><code data-trim data-noescape class="cpp">
+						[[catch2::test_case("Checking axioms", {"slide_code"})]] //✔
+
+						consteval catch2::test_case  get_test_case_name();
+						[[catch2::test_case(get_test_case_name())]] //✔ ️️(copy ctr)
+
+						[[get_test_case_name()]] //❌
+					</code></pre>
+				</section>
+
+
+				<section>
+					<h3>Problem</h3>
+					<ul>
+						<li>Standard and compilers defined attribute
+								<ul>
+									<li>Not declared</li>
+									<li>Ignorable</li>
+								</ul>
+						</li>
+						<li>User defined attribute, pre-declared, typed checked</li>
+					</ul>
+					<h3>How to distinguish ?</h3>
+				</section>
+
+				<section>
+					<h3>How to distinguish ?</h3>
+					<ul>
+						<li>Slightly different syntax for user-defined attributes</li>
+						<li>Widely different syntax</li>
+						<li>Reserve some namespaces for compilers/standard</li>
+						<li>Only parse attributes when reflecting on them</li>
+					</ul>
+				</section>
+
+				<section>
+					<h3>Slightly different syntax for user-defined attributes</h3>
+					<pre><code data-trim data-noescape lang="cpp">
+						[[ 👨‍🌾 catch2::test_case("Checking axioms", {"slide_code"})]]
+					</code></pre>
+					<pre><code data-trim data-noescape lang="cpp">
+						[[ + catch2::test_case("Checking axioms", {"slide_code"})]]
+					</code></pre>
+				</section>
+
+				<section>
+					API
+					<pre><code data-trim data-noescape lang="cpp">
+					namespace std::meta {
+
+						template &lt;typename Attr>
+						consteval bool has_attribute(info x);
+						template &lt;typename Attr>
+						consteval Attr attribute(info x);
+
+					}
+					</code></pre>
+				</section>
+
+				<section>
+					API
+					<pre><code data-trim data-noescape lang="cpp">
+					static constexpr auto r = meta::range(reflexpr(test));
+					for...(constexpr auto member : r) {
+					  static constexpr bool b = meta::has_attribute<Catch::test_case>(member);
+
+					  if constexpr(meta::is_function(member) && b) {
+					    constexpr auto data = meta::attribute<Catch::test_case>(member);
+						  std::cout << "Running test " << data.name << "\n";
+						  auto fn = &n::unqualid(meta::name_of(member));
+						  fragmentInURL();
+						}
+					}
+					</code></pre>
+				</section>
+
+				<section>
+					<code>[[decorator]]</code> attribute
+					<pre><code data-trim data-noescape lang="cpp">
+						struct [[decorator]] test_case{
+						  test_case(...);
+						};
+					</code></pre>
+					<code>
+						<small>warning: test_case cannot be used as an attribute because it does not have any constexpr constructor</small>
+					</code>
+					<p>
+						<ul>
+							<li>documentation</li>
+							<li>diagnostics</li>
+							<li>ignorable</li>
+						</ul>
+					</p>
+				</section>
+
+
+				<section>
+					Transformations / register
+					<pre><code data-trim data-noescape lang="cpp">
+					[[http::handle_route("/index.html")]]
+					void do_index(http::request);
+					</code></pre>
+				</section>
+
+				<section>
+					Future works: Code transformation
+					<pre><code data-trim data-noescape lang="cpp">
+					[[my_first_contract_lib::expects(reflexpr(idx > 0))]]
+					void f(int idx = 0);
+					</code></pre>
+
+					<pre><code data-trim data-noescape lang="cpp">
+					void f(int idx = 0) {
+					  if constexpr(my_first_contract_lib::check) {
+					    if (!(idx > 0)) {
+					      std::terminate();
+					    }
+					  }
+					  original_f(idx);
+					}
+					</code></pre>
+				</section>
 			</div>
 		</div>
 
@@ -42,7 +355,11 @@
 					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/notes/notes.js', async: true },
 					{ src: 'plugin/highlight/highlight.js', async: true }
-				]
+				],
+				hash: true,
+                history: true,
+                fragmentInURL: true,
+                pdfSeparateFragments: false
 			});
 		</script>
 	</body>
